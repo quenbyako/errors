@@ -1,24 +1,25 @@
-// +build go1.13
-
-package errors
+package errors_test
 
 import (
 	stderrors "errors"
 	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/quenbyako/errors"
+	"github.com/stretchr/testify/require"
 )
 
 func TestErrorChainCompat(t *testing.T) {
 	err := stderrors.New("error that gets wrapped")
-	wrapped := Wrap(err, "wrapped up")
+	wrapped := errors.Wrap(err, "wrapped up")
 	if !stderrors.Is(wrapped, err) {
 		t.Errorf("Wrap does not support Go 1.13 error chains")
 	}
 }
 
 func TestIs(t *testing.T) {
-	err := New("test")
+	err := errors.New("test")
 
 	type args struct {
 		err    error
@@ -32,7 +33,7 @@ func TestIs(t *testing.T) {
 		{
 			name: "with stack",
 			args: args{
-				err:    WithStack(err),
+				err:    errors.WithStack(err),
 				target: err,
 			},
 			want: true,
@@ -40,7 +41,7 @@ func TestIs(t *testing.T) {
 		{
 			name: "with message",
 			args: args{
-				err:    WithMessage(err, "test"),
+				err:    errors.WithMessage(err, "test"),
 				target: err,
 			},
 			want: true,
@@ -48,7 +49,7 @@ func TestIs(t *testing.T) {
 		{
 			name: "with message format",
 			args: args{
-				err:    WithMessagef(err, "%s", "test"),
+				err:    errors.WithMessagef(err, "%s", "test"),
 				target: err,
 			},
 			want: true,
@@ -64,7 +65,7 @@ func TestIs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := Is(tt.args.err, tt.args.target); got != tt.want {
+			if got := stderrors.Is(tt.args.err, tt.args.target); got != tt.want {
 				t.Errorf("Is() = %v, want %v", got, tt.want)
 			}
 		})
@@ -92,7 +93,7 @@ func TestAs(t *testing.T) {
 		{
 			name: "with stack",
 			args: args{
-				err:    WithStack(err),
+				err:    errors.WithStack(err),
 				target: new(customErr),
 			},
 			want: true,
@@ -100,7 +101,7 @@ func TestAs(t *testing.T) {
 		{
 			name: "with message",
 			args: args{
-				err:    WithMessage(err, "test"),
+				err:    errors.WithMessage(err, "test"),
 				target: new(customErr),
 			},
 			want: true,
@@ -108,7 +109,7 @@ func TestAs(t *testing.T) {
 		{
 			name: "with message format",
 			args: args{
-				err:    WithMessagef(err, "%s", "test"),
+				err:    errors.WithMessagef(err, "%s", "test"),
 				target: new(customErr),
 			},
 			want: true,
@@ -124,7 +125,7 @@ func TestAs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := As(tt.args.err, tt.args.target); got != tt.want {
+			if got := stderrors.As(tt.args.err, tt.args.target); got != tt.want {
 				t.Errorf("As() = %v, want %v", got, tt.want)
 			}
 
@@ -137,42 +138,37 @@ func TestAs(t *testing.T) {
 }
 
 func TestUnwrap(t *testing.T) {
-	err := New("test")
+	err := errors.New("test")
 
-	type args struct {
-		err error
-	}
 	tests := []struct {
 		name string
-		args args
+		err  error
 		want error
 	}{
 		{
 			name: "with stack",
-			args: args{err: WithStack(err)},
+			err:  errors.WithStack(err),
 			want: err,
 		},
 		{
 			name: "with message",
-			args: args{err: WithMessage(err, "test")},
+			err:  errors.WithMessage(err, "test"),
 			want: err,
 		},
 		{
 			name: "with message format",
-			args: args{err: WithMessagef(err, "%s", "test")},
+			err:  errors.WithMessagef(err, "%s", "test"),
 			want: err,
 		},
 		{
 			name: "std errors compatibility",
-			args: args{err: fmt.Errorf("wrap: %w", err)},
+			err:  fmt.Errorf("wrap: %w", err),
 			want: err,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := Unwrap(tt.args.err); !reflect.DeepEqual(err, tt.want) {
-				t.Errorf("Unwrap() error = %v, want %v", err, tt.want)
-			}
+			require.Equal(t, tt.want, stderrors.Unwrap(tt.err))
 		})
 	}
 }

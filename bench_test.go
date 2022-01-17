@@ -1,26 +1,25 @@
-// +build go1.7
-
-package errors
+package errors_test
 
 import (
 	"fmt"
 	"testing"
 
 	stderrors "errors"
+	"github.com/quenbyako/errors"
 )
 
-func noErrors(at, depth int) error {
+func stdErrors(at, depth int) error {
 	if at >= depth {
 		return stderrors.New("no error")
 	}
-	return noErrors(at+1, depth)
+	return stdErrors(at+1, depth)
 }
 
-func yesErrors(at, depth int) error {
+func ownErrors(at, depth int) error {
 	if at >= depth {
-		return New("ye error")
+		return errors.New("ye error")
 	}
-	return yesErrors(at+1, depth)
+	return ownErrors(at+1, depth)
 }
 
 // GlobalE is an exported global to store the result of benchmark results,
@@ -41,16 +40,16 @@ func BenchmarkErrors(b *testing.B) {
 		{1000, true},
 	}
 	for _, r := range runs {
-		part := "pkg/errors"
+		part := "quenbyako/errors"
 		if r.std {
 			part = "errors"
 		}
 		name := fmt.Sprintf("%s-stack-%d", part, r.stack)
 		b.Run(name, func(b *testing.B) {
 			var err error
-			f := yesErrors
+			f := ownErrors
 			if r.std {
-				f = noErrors
+				f = stdErrors
 			}
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
@@ -83,7 +82,7 @@ func BenchmarkStackFormatting(b *testing.B) {
 	for _, r := range runs {
 		name := fmt.Sprintf("%s-stack-%d", r.format, r.stack)
 		b.Run(name, func(b *testing.B) {
-			err := yesErrors(0, r.stack)
+			err := ownErrors(0, r.stack)
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
@@ -96,12 +95,15 @@ func BenchmarkStackFormatting(b *testing.B) {
 	for _, r := range runs {
 		name := fmt.Sprintf("%s-stacktrace-%d", r.format, r.stack)
 		b.Run(name, func(b *testing.B) {
-			err := yesErrors(0, r.stack)
-			st := err.(*fundamental).stack.StackTrace()
+			err := ownErrors(0, r.stack)
+			stack := errors.Stack(err)
+			if stack == nil {
+				b.FailNow()
+			}
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				stackStr = fmt.Sprintf(r.format, st)
+				stackStr = fmt.Sprintf(r.format, stack)
 			}
 			b.StopTimer()
 		})

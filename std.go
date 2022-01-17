@@ -1,5 +1,3 @@
-// +build go1.13
-
 package errors
 
 import (
@@ -33,6 +31,4 @@ func As(err error, target interface{}) bool { return stderrors.As(err, target) }
 // Unwrap returns the result of calling the Unwrap method on err, if err's
 // type contains an Unwrap method returning error.
 // Otherwise, Unwrap returns nil.
-func Unwrap(err error) error {
-	return stderrors.Unwrap(err)
-}
+func Unwrap(err error) error { return stderrors.Unwrap(err) }

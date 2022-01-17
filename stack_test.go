@@ -1,9 +1,12 @@
-package errors
+package errors_test
 
 import (
 	"fmt"
-	"runtime"
+	"strings"
 	"testing"
+
+	_ "github.com/k0kubun/pp"
+	"github.com/quenbyako/errors"
 )
 
 var initpc = caller()
@@ -11,18 +14,18 @@ var initpc = caller()
 type X struct{}
 
 // val returns a Frame pointing to itself.
-func (x X) val() Frame {
+func (x X) val() errors.Frame {
 	return caller()
 }
 
 // ptr returns a Frame pointing to itself.
-func (x *X) ptr() Frame {
+func (x *X) ptr() errors.Frame {
 	return caller()
 }
 
 func TestFrameFormat(t *testing.T) {
 	var tests = []struct {
-		Frame
+		errors.Frame
 		format string
 		want   string
 	}{{
@@ -32,8 +35,8 @@ func TestFrameFormat(t *testing.T) {
 	}, {
 		initpc,
 		"%+s",
-		"github.com/pkg/errors.init\n" +
-			"\t.+/github.com/pkg/errors/stack_test.go",
+		errors.PkgName + ".init\n" +
+			`.+/` + errors.PkgNameRaw + `/stack_test\.go`,
 	}, {
 		0,
 		"%s",
@@ -45,7 +48,7 @@ func TestFrameFormat(t *testing.T) {
 	}, {
 		initpc,
 		"%d",
-		"9",
+		"12",
 	}, {
 		0,
 		"%d",
@@ -55,14 +58,14 @@ func TestFrameFormat(t *testing.T) {
 		"%n",
 		"init",
 	}, {
-		func() Frame {
+		func() errors.Frame {
 			var x X
 			return x.ptr()
 		}(),
 		"%n",
 		`\(\*X\).ptr`,
 	}, {
-		func() Frame {
+		func() errors.Frame {
 			var x X
 			return x.val()
 		}(),
@@ -75,20 +78,23 @@ func TestFrameFormat(t *testing.T) {
 	}, {
 		initpc,
 		"%v",
-		"stack_test.go:9",
+		"stack_test.go:12",
 	}, {
 		initpc,
 		"%+v",
-		"github.com/pkg/errors.init\n" +
-			"\t.+/github.com/pkg/errors/stack_test.go:9",
+		errors.PkgName + ".init\n" +
+			"\t.+/" + errors.PkgNameRaw + "/stack_test.go:12",
 	}, {
 		0,
 		"%v",
 		"unknown:0",
 	}}
 
-	for i, tt := range tests {
-		testFormatRegexp(t, i, tt.Frame, tt.format, tt.want)
+	for _, tt := range tests {
+		t.Run("", func(t *testing.T) {
+			requireMultilineRegexp(t, tt.want, fmt.Sprintf(tt.format, tt.Frame))
+		})
+
 	}
 }
 
@@ -113,72 +119,9 @@ func TestFuncname(t *testing.T) {
 	}
 }
 
-func TestStackTrace(t *testing.T) {
-	tests := []struct {
-		err  error
-		want []string
-	}{{
-		New("ooh"), []string{
-			"github.com/pkg/errors.TestStackTrace\n" +
-				"\t.+/github.com/pkg/errors/stack_test.go:121",
-		},
-	}, {
-		Wrap(New("ooh"), "ahh"), []string{
-			"github.com/pkg/errors.TestStackTrace\n" +
-				"\t.+/github.com/pkg/errors/stack_test.go:126", // this is the stack of Wrap, not New
-		},
-	}, {
-		Cause(Wrap(New("ooh"), "ahh")), []string{
-			"github.com/pkg/errors.TestStackTrace\n" +
-				"\t.+/github.com/pkg/errors/stack_test.go:131", // this is the stack of New
-		},
-	}, {
-		func() error { return New("ooh") }(), []string{
-			`github.com/pkg/errors.TestStackTrace.func1` +
-				"\n\t.+/github.com/pkg/errors/stack_test.go:136", // this is the stack of New
-			"github.com/pkg/errors.TestStackTrace\n" +
-				"\t.+/github.com/pkg/errors/stack_test.go:136", // this is the stack of New's caller
-		},
-	}, {
-		Cause(func() error {
-			return func() error {
-				return Errorf("hello %s", fmt.Sprintf("world: %s", "ooh"))
-			}()
-		}()), []string{
-			`github.com/pkg/errors.TestStackTrace.func2.1` +
-				"\n\t.+/github.com/pkg/errors/stack_test.go:145", // this is the stack of Errorf
-			`github.com/pkg/errors.TestStackTrace.func2` +
-				"\n\t.+/github.com/pkg/errors/stack_test.go:146", // this is the stack of Errorf's caller
-			"github.com/pkg/errors.TestStackTrace\n" +
-				"\t.+/github.com/pkg/errors/stack_test.go:147", // this is the stack of Errorf's caller's caller
-		},
-	}}
-	for i, tt := range tests {
-		x, ok := tt.err.(interface {
-			StackTrace() StackTrace
-		})
-		if !ok {
-			t.Errorf("expected %#v to implement StackTrace() StackTrace", tt.err)
-			continue
-		}
-		st := x.StackTrace()
-		for j, want := range tt.want {
-			testFormatRegexp(t, i, st[j], "%+v", want)
-		}
-	}
-}
-
-func stackTrace() StackTrace {
-	const depth = 8
-	var pcs [depth]uintptr
-	n := runtime.Callers(1, pcs[:])
-	var st stack = pcs[0:n]
-	return st.StackTrace()
-}
-
 func TestStackTraceFormat(t *testing.T) {
 	tests := []struct {
-		StackTrace
+		errors.StackTrace
 		format string
 		want   string
 	}{{
@@ -198,53 +141,56 @@ func TestStackTraceFormat(t *testing.T) {
 		"%#v",
 		`\[\]errors.Frame\(nil\)`,
 	}, {
-		make(StackTrace, 0),
+		errors.StackTrace{},
 		"%s",
 		`\[\]`,
 	}, {
-		make(StackTrace, 0),
+		errors.StackTrace{},
 		"%v",
 		`\[\]`,
 	}, {
-		make(StackTrace, 0),
+		errors.StackTrace{},
 		"%+v",
 		"",
 	}, {
-		make(StackTrace, 0),
+		errors.StackTrace{},
 		"%#v",
 		`\[\]errors.Frame{}`,
 	}, {
-		stackTrace()[:2],
+		stackyCaller()[:2],
 		"%s",
 		`\[stack_test.go stack_test.go\]`,
 	}, {
-		stackTrace()[:2],
+		stackyCaller()[:2],
 		"%v",
-		`\[stack_test.go:174 stack_test.go:221\]`,
+		`\[stack_test.go:189 stack_test.go:164\]`,
 	}, {
-		stackTrace()[:2],
+		stackyCaller()[:2],
 		"%+v",
-		"\n" +
-			"github.com/pkg/errors.stackTrace\n" +
-			"\t.+/github.com/pkg/errors/stack_test.go:174\n" +
-			"github.com/pkg/errors.TestStackTraceFormat\n" +
-			"\t.+/github.com/pkg/errors/stack_test.go:225",
+		errors.PkgName + ".stackyCaller\n" +
+			"\t.+/" + errors.PkgNameRaw + "/stack_test.go:189\n" +
+			errors.PkgName + ".TestStackTraceFormat\n" +
+			"\t.+/" + errors.PkgNameRaw + "/stack_test.go:168\n",
 	}, {
-		stackTrace()[:2],
+		stackyCaller()[:2],
 		"%#v",
-		`\[\]errors.Frame{stack_test.go:174, stack_test.go:233}`,
+		`\[\]errors.Frame{stack_test.go:189, stack_test.go:175}`,
 	}}
 
-	for i, tt := range tests {
-		testFormatRegexp(t, i, tt.StackTrace, tt.format, tt.want)
+	for _, tt := range tests {
+		t.Run("", func(t *testing.T) {
+			requireMultilineRegexp(t, tt.want, fmt.Sprintf(tt.format, tt.StackTrace))
+		})
 	}
 }
 
-// a version of runtime.Caller that returns a Frame, not a uintptr.
-func caller() Frame {
-	var pcs [3]uintptr
-	n := runtime.Callers(2, pcs[:])
-	frames := runtime.CallersFrames(pcs[:n])
-	frame, _ := frames.Next()
-	return Frame(frame.PC)
+// a version of runtime.Caller that returns a single Frame, not a full stacktrace.
+func caller() errors.Frame            { return errors.Callers(1)[0] }
+func stackyCaller() errors.StackTrace { return errors.Callers(0) }
+
+func funcname(name string) string {
+	i := strings.LastIndex(name, "/")
+	name = name[i+1:]
+	i = strings.Index(name, ".")
+	return name[i+1:]
 }

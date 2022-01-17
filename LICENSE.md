@@ -1,5 +1,11 @@
-Copyright (c) 2015, Dave Cheney <dave@cheney.net>
-All rights reserved.
+Simplified BSD License
+=====================
+
+_Copyright (c) `2015`, `Dave Cheney <dave@cheney.net>`_
+
+_Copyright (c) `2021`, `Xelaj Software`_
+
+_All rights reserved._
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
